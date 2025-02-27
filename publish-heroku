@@ -1,0 +1,32 @@
+#!/bin/bash
+# Script for pushing a mooc-strapi project to heroku
+
+echo "What is your heroku project name?"
+read project_name
+app_result=`heroku create $project_name`
+echo $app_result
+app_name="$(echo $app_result | grep 'https://' | cut -d / -f2- | cut -d '/' -f 2 | cut -d '.' -f 1)"
+echo $app_name
+if [ -z "$app_name" ]
+then
+exit 1
+fi
+
+# 添加heroku-postgresql插件
+heroku addons:create heroku-postgresql:essential-0 -a $project_name
+
+heroku config:set APP_KEYS=$(openssl rand -base64 32)
+heroku config:set API_TOKEN_SALT=$(openssl rand -base64 32)
+heroku config:set ADMIN_JWT_SECRET=$(openssl rand -base64 32)
+heroku config:set JWT_SECRET=$(openssl rand -base64 32)
+heroku config:set MY_HEROKU_URL=$(heroku info -s | grep web_url | cut -d= -f2)
+heroku config:set NODE_ENV=production
+
+heroku config:set AWS_BUCKET=$(cat .env | grep -w AWS_BUCKET | cut -d= -f2)
+heroku config:set AWS_ACCESS_KEY_ID=$(cat .env | grep -w AWS_ACCESS_KEY_ID | cut -d= -f2)
+heroku config:set AWS_ACCESS_SECRET=$(cat .env | grep -w AWS_ACCESS_SECRET | cut -d= -f2)
+
+
+heroku git:remote -a $project_name
+git push heroku master
+heroku open -a $project_name

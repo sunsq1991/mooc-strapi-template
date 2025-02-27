@@ -1,0 +1,40 @@
+#!/bin/bash
+# Script for creating aws s3 bucket and iam user
+echo "What is your project name?"
+read project_name
+bucket_name="${project_name}-mooc"
+echo "creating aws bucket ${bucket_name}"
+bucket_result=`aws s3api create-bucket --bucket $bucket_name --region ca-central-1 --create-bucket-configuration LocationConstraint=ca-central-1`
+echo $bucket_result
+if [ -z `echo $bucket_result | jq -r '.Location'` ]
+then
+exit 1
+fi
+aws s3api delete-public-access-block --bucket $bucket_name
+aws s3api delete-bucket-ownership-controls --bucket $bucket_name
+policy_template=`cat ./policy.json`
+policy=${policy_template//bucket-name/$bucket_name}
+echo $policy > policy_temp
+policy_result=`aws iam create-policy --policy-name $project_name --policy-document file://policy_temp`
+rm policy_temp
+echo $policy_result
+policy_arn=`echo $policy_result | jq -r '.Policy.Arn'`
+if [ -z policy_arn ]
+then
+exit 1
+fi
+aws iam create-user --user-name $project_name
+aws iam attach-user-policy --user-name $project_name --policy-arn $policy_arn
+access_key_result=`aws iam create-access-key --user-name $project_name`
+echo $access_key_result
+AWS_ACCESS_KEY_ID=`echo $access_key_result | jq -r '.AccessKey.AccessKeyId'`
+AWS_ACCESS_SECRET=`echo $access_key_result | jq -r '.AccessKey.SecretAccessKey'`
+if [ -z AWS_ACCESS_KEY_ID ]
+then
+exit 1
+fi
+echo "AWS_BUCKET=${bucket_name}" >> .env
+echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}" >> .env
+echo "AWS_ACCESS_SECRET=${AWS_ACCESS_SECRET}" >> .env
+
+echo "AWS S3 bucket and iam user created successfully!"
